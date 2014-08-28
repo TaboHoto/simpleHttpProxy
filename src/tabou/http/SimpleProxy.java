@@ -20,11 +20,11 @@ public class SimpleProxy {
     private ServerSocket serverSocket;
 
     public static void usage() {
-        System.err.println("Usage使い方: java tabou.http.SimpleProxy [-p ポート番号] [-P 親プロキシURL]");
+        System.err.println("Usage: java tabou.http.SimpleProxy [-p server port] [-P parent proxy URL]");
         System.exit(-1);
     }
     public static void main(String[] args) throws Exception{
-        int localPort = DEFAULT_PROXY_PORT;  /* ポート番号取得       */
+        int localPort = DEFAULT_PROXY_PORT;
         SimpleProxy simpleProxy = new SimpleProxy();
         int argi = 0;
         for (; argi < args.length; argi++) {
@@ -33,19 +33,19 @@ public class SimpleProxy {
                 break;
             }
             if (chars.length != 2) {
-                System.err.println("不正な引数:" + args[argi]);
+                System.err.println("invalid option:" + args[argi]);
                 usage();
             }
             char c = chars[1];
             switch (c) {
-            case 'p':
-                localPort = Integer.parseInt(args[++argi]);  /* ポート番号取得       */
+            case 'p':  /* server port */
+                localPort = Integer.parseInt(args[++argi]);
                 break;
-            case 'P':
-                simpleProxy.parentProxy = new URL(args[++argi]);  /* 親プロキシ       */
+            case 'P':  /* parent proxy       */
+                simpleProxy.parentProxy = new URL(args[++argi]);
                 break;
             default:
-                System.err.println("不正な引数:" + c);
+                System.err.println("invalid option:" + c);
                 usage();
             }
         }
@@ -186,7 +186,7 @@ public class SimpleProxy {
         webSocket.close();
     }
     /**
-     * 一行読み込み
+     * read line
      */
     public String readLine(InputStream in) throws IOException{
         ByteArrayOutputStream sb = new ByteArrayOutputStream();
@@ -194,7 +194,7 @@ public class SimpleProxy {
             int c = in.read();
             if(c < 0){
                 if(sb.size() == 0){
-                    return null; //読み込み終了
+                    return null; //end of file
                 }
                 break;
             }else if(c == '\r'){
