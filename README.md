@@ -4,9 +4,9 @@ Written in 200 step only, http proxy server
 
 Start
 -----
-\$ javac tabou/http/SimpleProxy.java
-\$ java tabou.http.SimpleProxy
-wait:\*.8080 ...
+$ javac tabou/http/SimpleProxy.java  
+$ java tabou.http.SimpleProxy  
+wait:\*.8080 ...  
 
 Usage
 -----
