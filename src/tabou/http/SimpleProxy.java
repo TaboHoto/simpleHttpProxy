@@ -13,6 +13,7 @@ import java.net.Socket;
 import java.net.URL;
 
 /**
+ * Http proxy server
  */
 public class SimpleProxy {
     static int DEFAULT_PROXY_PORT = 8080;
@@ -66,9 +67,6 @@ public class SimpleProxy {
             }
             System.out.println("close");
         }
-    }
-    public void close() throws IOException{
-        this.serverSocket.close();
     }
     public void request(Socket requestSocket) throws IOException{
         requestSocket.setSoTimeout(1000 * 100);
@@ -186,7 +184,7 @@ public class SimpleProxy {
         webSocket.close();
     }
     /**
-     * read line
+     * Read one line from InputStream
      */
     public String readLine(InputStream in) throws IOException{
         ByteArrayOutputStream sb = new ByteArrayOutputStream();
