@@ -1,6 +1,6 @@
 /* Copyright(c) 2011 M Hata
-   This software is released under the MIT License.
-   http://opensource.org/licenses/mit-license.php */
+ This software is released under the MIT License.
+ http://opensource.org/licenses/mit-license.php */
 package tabou.http;
 import java.io.ByteArrayOutputStream;
 import java.io.BufferedInputStream;
@@ -18,14 +18,13 @@ import java.net.URL;
 public class SimpleProxy {
     static int DEFAULT_PROXY_PORT = 8080;
     private URL parentProxy = null;
-    private ServerSocket serverSocket;
 
     public static void usage() {
-        System.err.println("Usage: java tabou.http.SimpleProxy [-p server port] [-P parent proxy URL]");
+        System.err.println("usage: java tabou.http.SimpleProxy [-p port] [-P parent proxy URL]");
         System.exit(-1);
     }
     public static void main(String[] args) throws Exception{
-        int localPort = DEFAULT_PROXY_PORT;
+        int localPort = DEFAULT_PROXY_PORT;  /* ポート番号取得       */
         SimpleProxy simpleProxy = new SimpleProxy();
         int argi = 0;
         for (; argi < args.length; argi++) {
@@ -39,11 +38,11 @@ public class SimpleProxy {
             }
             char c = chars[1];
             switch (c) {
-            case 'p':  /* server port */
-                localPort = Integer.parseInt(args[++argi]);
+            case 'p':
+                localPort = Integer.parseInt(args[++argi]);  /* ポート番号取得       */
                 break;
-            case 'P':  /* parent proxy       */
-                simpleProxy.parentProxy = new URL(args[++argi]);
+            case 'P':
+                simpleProxy.parentProxy = new URL(args[++argi]);  /* 親プロキシ       */
                 break;
             default:
                 System.err.println("invalid option:" + c);
@@ -53,60 +52,75 @@ public class SimpleProxy {
         simpleProxy.proxy(localPort);
     }
     public void proxy(int localPort) throws IOException{
-        this.serverSocket = new ServerSocket(localPort);
-        while (true) {
-            System.out.println("wait:*."+ localPort  +" ...");
-            Socket requestSocket = this.serverSocket.accept();
-            System.out.println("accept:" + requestSocket.getInetAddress());
-            try{
-                request(requestSocket);
-            }catch(Exception e){
-                System.err.println(e.toString());
-            }finally{
-                requestSocket.close();
+        try(ServerSocket serverSocket = new ServerSocket(localPort)){
+            while (true) {
+                System.out.println("wait:*."+ localPort  +" ...");
+                try(Socket requestSocket = serverSocket.accept()) {
+                    System.out.println("accept:" + requestSocket.getInetAddress());
+                    request(requestSocket);
+                }catch(Exception e){
+                    System.err.println(e.toString());
+                }
+                System.out.println("close");
             }
-            System.out.println("close");
         }
     }
     public void request(Socket requestSocket) throws IOException{
         requestSocket.setSoTimeout(1000 * 100);
-        BufferedInputStream requestIn =
-            new BufferedInputStream(requestSocket.getInputStream());
-        BufferedOutputStream requestOut =
-            new BufferedOutputStream(requestSocket.getOutputStream());
+        try(BufferedInputStream requestIn =
+                new BufferedInputStream(requestSocket.getInputStream());
+            BufferedOutputStream requestOut =
+                new BufferedOutputStream(requestSocket.getOutputStream())){
 
-        String firstLine = readLine(requestIn);
-        System.out.println(firstLine);
-        String[] stats = firstLine.split(" ");
-        String methed = stats[0];
-        URL    url    = new URL(stats[1]);
-        String version= stats[2];
-        Socket webSocket;
-        try{
-            if(parentProxy == null){
-                int webPort = url.getPort();
-                if(webPort < 0){
-                    webPort = 80;
-                }
-                webSocket = new Socket(url.getHost(),webPort);
-            }else{
-                webSocket = new Socket(parentProxy.getHost(),parentProxy.getPort());
+            String firstLine = readLine(requestIn);
+            System.out.println(firstLine);
+            String[] stats = firstLine.split(" ");
+            String methed = stats[0];
+            URL    url    = new URL(stats[1]);
+            String version= stats[2];
+            Socket webSocket;
+            try{
+                webSocket = createWebSocket(url);
+            }catch(Exception e){
+                System.err.println(e.toString());
+                httpError(requestOut, e.toString());
+                return;
             }
-        }catch(Exception e){
-            System.err.println(e.toString());
-            requestOut.write("HTTP/1.0 500 ".getBytes());
-            requestOut.write(e.toString().getBytes());
-            requestOut.write("\r\n".getBytes());
-            requestOut.write("Content-type: text/plain\r\n".getBytes());
-            requestOut.write("Connection: close\r\n".getBytes());
-            requestOut.write("\r\n".getBytes());
-            requestOut.write(e.toString().getBytes());
-            requestOut.flush();
-            return;
+            try(Socket webSocketTry = webSocket) {
+                webSocket.setSoTimeout(1000 * 100);
+                try(BufferedOutputStream webOut =
+                    new BufferedOutputStream(webSocket.getOutputStream())){
+                    headerFirst(methed,url,version,webOut);
+                    header(requestIn, webOut);
+                    try(BufferedInputStream webIn =
+                        new BufferedInputStream(webSocket.getInputStream())){
+                        body(webIn, requestOut);
+                    }
+                }
+            }
         }
-        webSocket.setSoTimeout(1000 * 100);
-        BufferedOutputStream webOut =
-            new BufferedOutputStream(webSocket.getOutputStream());
+    }
+    public Socket createWebSocket(URL url) throws IOException{
+        if(parentProxy != null){
+            return new Socket(parentProxy.getHost(),parentProxy.getPort());
+        }
+        int webPort = url.getPort();
+        if(webPort < 0){
+            webPort = 80;
+        }
+        return new Socket(url.getHost(),webPort);
+    }
+    public void httpError(BufferedOutputStream requestOut,String message) throws IOException{
+        requestOut.write("HTTP/1.0 500 ".getBytes());
+        requestOut.write(message.getBytes());
+        requestOut.write("\r\n".getBytes());
+        requestOut.write("Content-type: text/plain\r\n".getBytes());
+        requestOut.write("Connection: close\r\n".getBytes());
+        requestOut.write("\r\n".getBytes());
+        requestOut.write(message.getBytes());
+        requestOut.flush();
+    }
+    public void headerFirst(String methed,URL url,String version,BufferedOutputStream webOut) throws IOException{
         webOut.write(methed.getBytes());
         webOut.write(" ".getBytes());
         if(parentProxy != null){
@@ -117,6 +131,8 @@ public class SimpleProxy {
         webOut.write(" ".getBytes());
         webOut.write(version.getBytes());
         webOut.write("\r\n".getBytes());
+    }
+    public void header(BufferedInputStream requestIn, BufferedOutputStream webOut) throws IOException{
         int contentLength = 0;
         while(true){
             String line = readLine(requestIn);
@@ -135,7 +151,7 @@ public class SimpleProxy {
             if(tagName.equals("KEEP-ALIVE")       ||
                tagName.equals("PROXY-CONNECTION") ||
                tagName.equals("CONNECTION")){
-    	        continue;
+              continue;
             }
             if(tagName.equals("CONTENT-LENGTH")){
                 contentLength = Integer.parseInt(value);
@@ -152,9 +168,9 @@ public class SimpleProxy {
 //            System.out.write(c);
         }
         webOut.flush();
-        BufferedInputStream webIn =
-            new BufferedInputStream(webSocket.getInputStream());
-        firstLine = readLine(webIn);
+    }
+    public void body(BufferedInputStream webIn, BufferedOutputStream requestOut) throws IOException{
+        String firstLine = readLine(webIn);
         System.out.println(firstLine);
         requestOut.write(firstLine.getBytes());
         requestOut.write("\r\n".getBytes());
@@ -177,11 +193,6 @@ public class SimpleProxy {
             }
             requestOut.write(c);
         }
-        webOut.close();
-        webIn.close();
-        requestOut.close();
-        requestIn.close();
-        webSocket.close();
     }
     /**
      * Read one line from InputStream
@@ -192,7 +203,7 @@ public class SimpleProxy {
             int c = in.read();
             if(c < 0){
                 if(sb.size() == 0){
-                    return null; //end of file
+                    return null; //読み込み終了
                 }
                 break;
             }else if(c == '\r'){
